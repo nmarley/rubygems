@@ -469,14 +469,14 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
       Gem::Requirement.new('>= 4.0.0.preview2').satisfied_by? Gem::RDoc.rdoc_version
   end
 
-  def latest_specs(req, res)
+  def latest_specs(req, res, prerelease = false)
     Gem::Specification.reset
 
     res['content-type'] = 'application/x-gzip'
 
     add_date res
 
-    latest_specs = Gem::Specification.latest_specs
+    latest_specs = Gem::Specification.latest_specs prerelease
 
     specs = latest_specs.sort.map do |spec|
       platform = spec.original_platform || Gem::Platform::RUBY
@@ -497,6 +497,10 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
     else
       res.body << specs
     end
+  end
+
+  def prerelease_specs(req, res)
+    latest_specs(req, res, true)
   end
 
   ##
@@ -536,8 +540,17 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
     res['content-type'] = 'text/plain'
     add_date res
 
+    gem_version_regex = /[0-9.]+
+                          (?:
+                           (?:\.alpha(?:[0-9]+)?)|
+                           (?:\.beta(?:[0-9]+)?)|
+                           (?:\.rc[0-9]+)|
+                           (?:\.pre(?:[0-9]+)?)
+                          )?
+                         /x
+
     case req.request_uri.path
-    when %r|^/quick/(Marshal.#{Regexp.escape Gem.marshal_version}/)?(.*?)-([0-9.]+)(-.*?)?\.gemspec\.rz$| then
+    when %r|^/quick/(Marshal.#{Regexp.escape Gem.marshal_version}/)?(.*?)-(#{gem_version_regex})(-.*?)?\.gemspec\.rz$| then
       marshal_format, name, version, platform = $1, $2, $3, $4
       specs = Gem::Specification.find_all_by_name name, version
 
@@ -748,6 +761,11 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
                        method(:latest_specs)
     @server.mount_proc "/latest_specs.#{Gem.marshal_version}.gz",
                        method(:latest_specs)
+
+    @server.mount_proc "/prerelease_specs.#{Gem.marshal_version}",
+                       method(:prerelease_specs)
+    @server.mount_proc "/prerelease_specs.#{Gem.marshal_version}.gz",
+                       method(:prerelease_specs)
 
     @server.mount_proc "/quick/", method(:quick)
 
